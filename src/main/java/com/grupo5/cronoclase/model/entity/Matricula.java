@@ -1,5 +1,6 @@
 package com.grupo5.cronoclase.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.grupo5.cronoclase.model.enums.*;
 
 import jakarta.persistence.*;
@@ -26,6 +27,7 @@ public class Matricula extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "estudiante_id", nullable = false)
+    @JsonBackReference
     private Estudiante estudiante;
 
     @ManyToOne(fetch = FetchType.LAZY)
