@@ -25,9 +25,10 @@ public class Matricula extends BaseEntity {
     @Column(nullable = false)
     private EstadoMatricula estadoMatricula;
 
+    // Sincronizamos el value con el ManagedReference de Estudiante
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "estudiante_id", nullable = false)
-    @JsonBackReference
+    @JsonBackReference(value = "estudiante-matricula")
     private Estudiante estudiante;
 
     @ManyToOne(fetch = FetchType.LAZY)
