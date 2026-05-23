@@ -36,14 +36,18 @@ public class Entrega extends BaseEntity {
     @Column(length = 500)
     private String comentario;
 
-    @ManyToOne(fetch = FetchType.LAZY) // LAZY para rendimiento
+    @ManyToOne(fetch = FetchType.LAZY) 
     @JoinColumn(name = "estudiante_id", nullable = false)
-
+    @JsonBackReference(value = "estudiante-entrega")
     private Estudiante estudiante;
 
-    @ManyToOne(fetch = FetchType.LAZY) // LAZY para rendimiento
-    @JoinColumn(name = "evaluacion_id", nullable = false)
 
+    // Nos preparamos para conectar con la Evaluación usando un value único
+    @ManyToOne(fetch = FetchType.LAZY) 
+    @JoinColumn(name = "evaluacion_id", nullable = false)
+    @JsonBackReference(value = "evaluacion-entrega")
     private Evaluacion evaluacion;
+
+    
 
 }

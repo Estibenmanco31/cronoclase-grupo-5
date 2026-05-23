@@ -5,6 +5,7 @@ import com.grupo5.cronoclase.model.enums.*;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 import java.util.List;
 
@@ -37,23 +38,26 @@ public class Grupo extends BaseEntity {
     @Column(nullable = false)
     private Jornada jornada;
 
+    // Cambiado de BackReference a IgnoreProperties para que el Front SÍ vea el curso
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "curso_id", nullable = false)
-    @JsonBackReference
+    @JsonIgnoreProperties({ "grupos", "hibernateLazyInitializer", "handler" })
     private Curso curso;
 
-    
+    // Se queda con @JsonIgnore porque el viaje empezó desde el estudiante
     @OneToMany(mappedBy = "grupo", cascade = CascadeType.ALL)
-    @JsonIgnore //Esto se puso para evitar el retorno infinito en el GET
+    @JsonIgnore 
     private List<Matricula> matriculas;
 
+    // Cambiado a ManagedReference para que el Front pueda listar las evaluaciones del grupo
     @OneToMany(mappedBy = "grupo", cascade = CascadeType.ALL)
-    @JsonIgnore //Esto se puso para evitar el retorno infinito en el GET
+    @JsonManagedReference(value = "grupo-evaluacion")
     private List<Evaluacion> evaluaciones;
 
+    // Perfecto, se queda así para ver los datos del profe sin bucles
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "profesor_id", nullable = false)
-    @JsonIgnoreProperties({ "grupos", "hibernateLazyInitializer", "handler" }) // Esto evita el bucle y el error de Lazy
+    @JsonIgnoreProperties({ "grupos", "hibernateLazyInitializer", "handler" }) 
     private Profesor profesor;
 
 }

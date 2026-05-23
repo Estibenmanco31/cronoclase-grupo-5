@@ -10,6 +10,7 @@ import lombok.Builder;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 @Getter
 @Setter
@@ -31,11 +32,15 @@ public class Estudiante extends BaseEntity {
     private String documentoID;
 
     @OneToMany(mappedBy = "estudiante", cascade = CascadeType.ALL)
-    @JsonIgnore //Esto se puso para evitar el retorno infinito en el GET
+    @JsonManagedReference //Esto se puso para evitar el retorno infinito en el GET
     private List<Matricula> matriculas;
 
+    
+
+
+    // Quitamos @JsonIgnore y ponemos ManagedReference con su propio nombre
     @OneToMany(mappedBy = "estudiante", cascade = CascadeType.ALL)
-    @JsonIgnore //Esto se puso para evitar el retorno infinito en el GET
+    @JsonManagedReference(value = "estudiante-entrega") 
     private List<Entrega> entregas;
 
 }
