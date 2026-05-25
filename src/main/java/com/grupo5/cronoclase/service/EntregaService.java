@@ -1,162 +1,157 @@
 package com.grupo5.cronoclase.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import com.grupo5.cronoclase.repository.*;
+import com.grupo5.cronoclase.exception.BusinessException;
+import com.grupo5.cronoclase.exception.ResourceNotFoundException;
 import com.grupo5.cronoclase.model.entity.*;
-import com.grupo5.cronoclase.model.enums.TipoEvaluacion;
 import com.grupo5.cronoclase.model.enums.EstadoEntrega;
+import com.grupo5.cronoclase.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 
 @Service
-
+@RequiredArgsConstructor
 public class EntregaService {
 
-    @Autowired
-    private EntregaRepository entregaRepository;
+    private final EntregaRepository entregaRepository;
+    private final EvaluacionRepository evaluacionRepository;
+    private final EstudianteRepository estudianteRepository;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // LÓGICA DE NEGOCIO: Determinar el estado de una entrega según fechas
-    // ─────────────────────────────────────────────────────────────────────────
+    // ─── ESTADO ──────────────────────────────────────────────────────────────
 
     /**
-     * Calcula y devuelve el EstadoEntrega correcto comparando:
-     *   - La fecha límite definida en la Evaluacion (fechaEntrega)
-     *   - La fecha real en que el estudiante hizo la entrega (fechaEntregaReal)
-     *
-     * Reglas:
-     *   · Si ya está CALIFICADO → no se cambia el estado.
-     *   · Si NO hay fecha real y el plazo AÚN NO venció → PENDIENTE
-     *   · Si NO hay fecha real y el plazo YA venció    → TARDE
-     *   · Si la fecha real es ≤ fecha límite           → ENTREGADO
-     *   · Si la fecha real es >  fecha límite           → TARDE
+     * Calcula el estado de la entrega según las fechas.
+     * · CALIFICADO  → no cambia automáticamente
+     * · Sin fecha real + plazo vigente  → PENDIENTE
+     * · Sin fecha real + plazo vencido  → TARDE
+     * · Fecha real ≤ fechaLímite        → ENTREGADO
+     * · Fecha real > fechaLímite        → TARDE
      */
-    public EstadoEntrega calcularEstado(Entrega entrega) {
+    public EstadoEntrega calcularEstado(LocalDate fechaLimite, LocalDate fechaReal, EstadoEntrega estadoActual) {
+        if (estadoActual == EstadoEntrega.CALIFICADO) return EstadoEntrega.CALIFICADO;
 
-        // Si ya fue calificado, el estado no debe cambiar automáticamente
-        if (entrega.getEstado() == EstadoEntrega.CALIFICADO) {
-            return EstadoEntrega.CALIFICADO;
-        }
-
-        LocalDate fechaLimite  = entrega.getEvaluacion().getFechaEntrega();
-        LocalDate fechaReal    = entrega.getFechaEntregaReal();
-        LocalDate hoy          = LocalDate.now();
-
-        // Aún no se ha registrado una entrega real
         if (fechaReal == null) {
-            return hoy.isAfter(fechaLimite)
-                    ? EstadoEntrega.TARDE      // el plazo ya venció y no entregó
-                    : EstadoEntrega.PENDIENTE; // aún está dentro del plazo
+            return LocalDate.now().isAfter(fechaLimite) ? EstadoEntrega.TARDE : EstadoEntrega.PENDIENTE;
         }
-
-        // Ya existe fecha real → comparar con la fecha límite
-        return fechaReal.isAfter(fechaLimite)
-                ? EstadoEntrega.TARDE    // entregó después del plazo
-                : EstadoEntrega.ENTREGADO; // entregó a tiempo
+        return fechaReal.isAfter(fechaLimite) ? EstadoEntrega.TARDE : EstadoEntrega.ENTREGADO;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ─── CRUD ────────────────────────────────────────────────────────────────
 
-    // Servicio para crear una sola entrega
-    public Entrega crearEntrega(Entrega entrega) {
-        entrega.setId(null); // Ignoramos cualquier id del body para forzar INSERT
-        entrega.setEstado(calcularEstado(entrega));
+    /**
+     * Crea o sobrescribe una entrega.
+     * Regla: Solo existe una entrega por estudiante por evaluación.
+     * Si ya existe → actualiza fechaEntregaReal, archivoUrl y comentario.
+     */
+    @Transactional
+    public Entrega crearOActualizarEntrega(Entrega entrega) {
+        Long estudianteId = entrega.getEstudiante().getId();
+        Long evaluacionId = entrega.getEvaluacion().getId();
+
+        Evaluacion evaluacion = evaluacionRepository.findById(evaluacionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Evaluación no encontrada con ID: " + evaluacionId));
+
+        if (!estudianteRepository.existsById(estudianteId)) {
+            throw new ResourceNotFoundException("Estudiante no encontrado con ID: " + estudianteId);
+        }
+
+        Optional<Entrega> existenteOpt = entregaRepository.findByEstudianteIdAndEvaluacionId(estudianteId, evaluacionId);
+
+        LocalDate fechaReal = entrega.getFechaEntregaReal() != null ? entrega.getFechaEntregaReal() : LocalDate.now();
+        EstadoEntrega nuevoEstado = calcularEstado(evaluacion.getFechaEntrega(), fechaReal, EstadoEntrega.PENDIENTE);
+
+        if (existenteOpt.isPresent()) {
+            // ── Sobrescribir entrega existente ──
+            Entrega existente = existenteOpt.get();
+            existente.setFechaEntregaReal(fechaReal);
+            existente.setArchivoUrl(entrega.getArchivoUrl());
+            existente.setComentario(entrega.getComentario());
+            if (existente.getEstado() != EstadoEntrega.CALIFICADO) {
+                existente.setEstado(nuevoEstado);
+            }
+            return entregaRepository.save(existente);
+        }
+
+        // ── Crear nueva entrega ──
+        entrega.setId(null);
+        entrega.setFechaEntregaReal(fechaReal);
+        entrega.setEstado(nuevoEstado);
+        entrega.setEvaluacion(evaluacion);
         return entregaRepository.save(entrega);
     }
 
-    // Servicio para crear varias entregas de una sola vez
-    public List<Entrega> crearVariasEntregas(List<Entrega> listaEntregas) {
-        // Usamos el método que ya existe en el repositorio por herencia
-        return entregaRepository.saveAll(listaEntregas);
-    }
-
-    // servicio para obtener todas las entregas
-    public List<Entrega> obtenerEntregas() {
+    public List<Entrega> obtenerTodas() {
         return entregaRepository.findAll();
     }
 
-    // servicio para obtener entregas por el ID de un estudiante
-    public List<Entrega> findEntregaByEstudianteId(Long estudianteId) {
+    public Entrega obtenerPorId(Long id) {
+        return entregaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Entrega no encontrada con ID: " + id));
+    }
+
+    public List<Entrega> obtenerPorEstudiante(Long estudianteId) {
         return entregaRepository.findByEstudianteId(estudianteId);
     }
 
-    // servicio para obtener entregas por el ID de una evaluación
-    public List<Entrega> findEntregaByEvaluacionId(Long evaluacionId) {
+    public List<Entrega> obtenerPorEvaluacion(Long evaluacionId) {
         return entregaRepository.findByEvaluacionId(evaluacionId);
     }
 
-    // servicio para obtener entregas filtrando por el nombre del estudiante
-    public List<Entrega> findEntregaByNombreEstudiante(String nombreEstudiante) {
-        // Esto permite que el profesor busque "Perez" y vea todas las entregas de
-        // alumnos con ese apellido
-        return entregaRepository.findByEstudianteNombreContainingIgnoreCase(nombreEstudiante);
+    public List<Entrega> obtenerPorGrupo(Long grupoId) {
+        return entregaRepository.findByGrupoId(grupoId);
     }
 
-    public Entrega obtenerPorId(Long id) {
-        // servicio para obtener una entrega por su ID
-        // De esta forma se busca una entrega por su ID y se lanza un mensaje de error
-        // en caso de que no se encuentre
-        return entregaRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Entrega no encontrada con ID: " + id));
-    }
-
-    @Transactional
-    public Entrega actualizarEntrega(Long id, Entrega entregaNuevosDatos) {
-        // 1. Buscamos la entrega actual (si no existe, lanza error)
-        Entrega entregaExistente = obtenerPorId(id);
-
-        // 2. Actualizamos los campos
-        entregaExistente.setFechaEntregaReal(entregaNuevosDatos.getFechaEntregaReal());
-        entregaExistente.setArchivoUrl(entregaNuevosDatos.getArchivoUrl());
-        entregaExistente.setComentario(entregaNuevosDatos.getComentario());
-
-        // 3. Recalculamos el estado automáticamente según las fechas
-        //    (solo cambiamos si el profesor NO lo marcó como CALIFICADO previamente)
-        if (entregaExistente.getEstado() != EstadoEntrega.CALIFICADO) {
-            entregaExistente.setEstado(calcularEstado(entregaExistente));
-        }
-
-        // 4. Guardamos los cambios
-        return entregaRepository.save(entregaExistente);
+    public List<Entrega> buscarPorNombreEstudiante(String nombre) {
+        return entregaRepository.findByEstudianteNombre(nombre);
     }
 
     /**
-     * Permite al profesor marcar una entrega como CALIFICADO explícitamente.
-     * Una vez calificado, el estado ya no cambia de forma automática.
+     * Permite al PROFESOR calificar una entrega con una nota de 0.0 a 5.0.
+     * El estado pasa a CALIFICADO y ya no cambia automáticamente.
      */
     @Transactional
-    public Entrega calificarEntrega(Long id) {
+    public Entrega calificarEntrega(Long id, Double nota) {
+        if (nota == null || nota < 0.0 || nota > 5.0) {
+            throw new BusinessException("La nota debe estar entre 0.0 y 5.0");
+        }
         Entrega entrega = obtenerPorId(id);
+        entrega.setNota(nota);
         entrega.setEstado(EstadoEntrega.CALIFICADO);
         return entregaRepository.save(entrega);
     }
 
     /**
-     * Recalcula y actualiza el estado de TODAS las entregas PENDIENTES.
-     * Útil para ejecutar como tarea programada (@Scheduled) y detectar
-     * automáticamente las entregas que vencieron su fecha límite.
+     * Recalcula el estado de todas las entregas PENDIENTES.
+     * Útil para ejecutar periódicamente y detectar entregas vencidas.
      */
     @Transactional
-    public void actualizarEstadosTodas() {
+    public int actualizarEstadosPendientes() {
         List<Entrega> todas = entregaRepository.findAll();
+        int actualizadas = 0;
         for (Entrega entrega : todas) {
             if (entrega.getEstado() == EstadoEntrega.PENDIENTE) {
-                entrega.setEstado(calcularEstado(entrega));
-                entregaRepository.save(entrega);
+                EstadoEntrega nuevo = calcularEstado(
+                        entrega.getEvaluacion().getFechaEntrega(),
+                        entrega.getFechaEntregaReal(),
+                        entrega.getEstado()
+                );
+                if (nuevo != entrega.getEstado()) {
+                    entrega.setEstado(nuevo);
+                    entregaRepository.save(entrega);
+                    actualizadas++;
+                }
             }
         }
+        return actualizadas;
     }
 
     @Transactional
     public void eliminarEntrega(Long id) {
-        // Verificamos existencia antes de borrar
         obtenerPorId(id);
         entregaRepository.deleteById(id);
     }
-
-    
-
 }

@@ -1,30 +1,34 @@
 package com.grupo5.cronoclase.dtos;
 
-import jakarta.persistence.Column;
+import com.grupo5.cronoclase.model.entity.Estudiante;
+import lombok.*;
 
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class EstudianteResponseDTO {
 
-     
+    private Long id;
     private String nombre;
-
     private String email;
+    private String documentoID;
 
-    // 1. Necesitas un constructor vacío (obligatorio para frameworks)
-    public EstudianteResponseDTO() {}
+    // Contacto (aplanado)
+    private String telefono;
+    private String direccion;
 
-    // 2. Necesitas un constructor con parámetros (opcional pero muy útil)
-    public EstudianteResponseDTO(String nombre, String email) {
-        this.nombre = nombre;
-        this.email = email;
+    public static EstudianteResponseDTO fromEntity(Estudiante e) {
+        if (e == null) {
+            return null;
+        }
+        return EstudianteResponseDTO.builder()
+                .id(e.getId())
+                .nombre(e.getNombre())
+                .email(e.getEmail())
+                .documentoID(e.getDocumentoID())
+                .telefono(e.getContacto() != null ? e.getContacto().getTelefono() : null)
+                .direccion(e.getContacto() != null ? e.getContacto().getDireccion() : null)
+                .build();
     }
-
-    // 3. ¡MUY IMPORTANTE!: Getters y Setters
-    public String getNombre() { return nombre; }
-    public void setNombre(String nombre) { this.nombre = nombre; }
-
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-
-
-
 }

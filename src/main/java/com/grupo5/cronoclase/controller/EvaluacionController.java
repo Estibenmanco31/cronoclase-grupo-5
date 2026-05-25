@@ -1,73 +1,97 @@
 package com.grupo5.cronoclase.controller;
 
-
-
-
-import org.springframework.web.bind.annotation.RestController;
-
+import com.grupo5.cronoclase.dtos.EvaluacionRequestDTO;
+import com.grupo5.cronoclase.dtos.EvaluacionResponseDTO;
 import com.grupo5.cronoclase.model.entity.*;
-import com.grupo5.cronoclase.service.*;
+import com.grupo5.cronoclase.service.EvaluacionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import java.util.List;
+import java.util.stream.Collectors;
 
-import java.util.*;
-
+@Tag(name = "Evaluaciones", description = "Gestión de evaluaciones por grupo")
 @RestController
 @RequestMapping("/api/evaluacion")
-
+@RequiredArgsConstructor
 public class EvaluacionController {
 
-    @Autowired
-    private EvaluacionService evaluacionService;
+    private final EvaluacionService evaluacionService;
 
+    @Operation(summary = "Crear una nueva evaluación para un grupo (el porcentaje total del grupo no puede superar 100%)")
     @PostMapping
-    public Evaluacion crearEvaluacion(@RequestBody Evaluacion evaluacion) {
-        return evaluacionService.crearEvaluacion(evaluacion);
+    public ResponseEntity<EvaluacionResponseDTO> crearEvaluacion(@Valid @RequestBody EvaluacionRequestDTO dto) {
+        Evaluacion evaluacion = new Evaluacion();
+        evaluacion.setTitulo(dto.getTitulo());
+        evaluacion.setDescripcion(dto.getDescripcion());
+        evaluacion.setTipo(dto.getTipo());
+        evaluacion.setPorcentaje(dto.getPorcentaje());
+        evaluacion.setFechaEntrega(dto.getFechaEntrega());
+
+        Grupo grupo = new Grupo();
+        grupo.setId(dto.getGrupoId());
+        evaluacion.setGrupo(grupo);
+
+        Evaluacion creada = evaluacionService.crearEvaluacion(evaluacion);
+        return new ResponseEntity<>(EvaluacionResponseDTO.fromEntity(creada), HttpStatus.CREATED);
     }
 
-    @PostMapping("/crearVarios")
-    public List<Evaluacion> crearVariasEvaluaciones(@RequestBody List<Evaluacion> listaEvaluaciones) {
-        return evaluacionService.crearVariasEvaluaciones(listaEvaluaciones);
-    }
-
+    @Operation(summary = "Listar todas las evaluaciones")
     @GetMapping
-    public List<Evaluacion> obtenerEvaluaciones() {
-        return evaluacionService.obtenerEvaluaciones();
+    public ResponseEntity<List<EvaluacionResponseDTO>> obtenerTodas() {
+        List<EvaluacionResponseDTO> dtos = evaluacionService.obtenerTodas().stream()
+                .map(EvaluacionResponseDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
+    @Operation(summary = "Obtener una evaluación por ID")
+    @GetMapping("/{id}")
+    public ResponseEntity<EvaluacionResponseDTO> obtenerPorId(@PathVariable Long id) {
+        Evaluacion evaluacion = evaluacionService.obtenerPorId(id);
+        return ResponseEntity.ok(EvaluacionResponseDTO.fromEntity(evaluacion));
+    }
+
+    @Operation(summary = "Ver evaluaciones de un grupo (acceso de estudiante y profesor)")
     @GetMapping("/grupo/{grupoId}")
-    public List<Evaluacion> findEvaluacionByGrupoId(@PathVariable Long grupoId) {
-        return evaluacionService.findEvaluacionByGrupoId(grupoId);
+    public ResponseEntity<List<EvaluacionResponseDTO>> obtenerPorGrupo(@PathVariable Long grupoId) {
+        List<EvaluacionResponseDTO> dtos = evaluacionService.obtenerPorGrupo(grupoId).stream()
+                .map(EvaluacionResponseDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
-    @GetMapping("/grupo/nombre/{nombreGrupo}")
-    public List<Evaluacion> findEvaluacionByNombreGrupo(@PathVariable String nombreGrupo) {
-        return evaluacionService.findEvaluacionByNombreGrupo(nombreGrupo);
+    @Operation(summary = "Buscar evaluaciones por nombre de grupo")
+    @GetMapping("/grupo/buscar/{nombre}")
+    public ResponseEntity<List<EvaluacionResponseDTO>> buscarPorNombreGrupo(@PathVariable String nombre) {
+        List<EvaluacionResponseDTO> dtos = evaluacionService.buscarPorNombreGrupo(nombre).stream()
+                .map(EvaluacionResponseDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
-    @GetMapping("/{evaluacionID}")
-    public Evaluacion obtenerPorId(@PathVariable Long evaluacionID) {
-        return evaluacionService.obtenerPorId(evaluacionID);
-    }
-
+    @Operation(summary = "Actualizar una evaluación")
     @PutMapping("/{id}")
-    public Evaluacion actualizarEvaluacion(@PathVariable Long id, @RequestBody Evaluacion evaluacion) {
-        // Llama al service que setea: titulo, tipo, porcentaje y fechaEntrega
-        return evaluacionService.actualizarEvaluacion(id, evaluacion);
+    public ResponseEntity<EvaluacionResponseDTO> actualizarEvaluacion(@PathVariable Long id, @Valid @RequestBody EvaluacionRequestDTO dto) {
+        Evaluacion datos = new Evaluacion();
+        datos.setTitulo(dto.getTitulo());
+        datos.setDescripcion(dto.getDescripcion());
+        datos.setTipo(dto.getTipo());
+        datos.setPorcentaje(dto.getPorcentaje());
+        datos.setFechaEntrega(dto.getFechaEntrega());
+        Evaluacion actualizada = evaluacionService.actualizarEvaluacion(id, datos);
+        return ResponseEntity.ok(EvaluacionResponseDTO.fromEntity(actualizada));
     }
 
-    // Endpoint para eliminar una evaluación (DELETE)
+    @Operation(summary = "Eliminar una evaluación (elimina también sus entregas)")
     @DeleteMapping("/{id}")
-    public String eliminarEvaluacion(@PathVariable Long id) {
+    public ResponseEntity<Void> eliminarEvaluacion(@PathVariable Long id) {
         evaluacionService.eliminarEvaluacion(id);
-        return "La evaluación con ID " + id + " ha sido eliminada (junto con sus entregas asociadas).";
+        return ResponseEntity.noContent().build();
     }
-
 }

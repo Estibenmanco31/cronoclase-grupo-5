@@ -1,53 +1,54 @@
 package com.grupo5.cronoclase.model.entity;
 
-import java.time.LocalDate;
-
 import com.fasterxml.jackson.annotation.JsonBackReference;
-import com.grupo5.cronoclase.model.enums.*;
+import com.grupo5.cronoclase.model.enums.EstadoEntrega;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import lombok.*;
 
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
+import java.time.LocalDate;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder // Patrón Builder para crear objetos fácilmente
+@Builder
 @Entity
 @Table(name = "entregas")
-
 public class Entrega extends BaseEntity {
+
     @Column(nullable = true)
     private LocalDate fechaEntregaReal;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    //PONER ESTO EN PENDIENTE POR DEFAULT
-    private EstadoEntrega estado;
+    @Builder.Default
+    private EstadoEntrega estado = EstadoEntrega.PENDIENTE;
 
-    @Column(length = 300)
+    // URL del archivo adjunto o enlace externo (Google Drive, GitHub, etc.)
+    @Column(length = 500)
     private String archivoUrl;
 
-    @Column(length = 500)
+    @Column(length = 1000)
     private String comentario;
 
-    @ManyToOne(fetch = FetchType.LAZY) 
+    // Nota de 0.0 a 5.0 asignada por el profesor
+    @DecimalMin(value = "0.0", message = "La nota mínima es 0.0")
+    @DecimalMax(value = "5.0", message = "La nota máxima es 5.0")
+    @Column(nullable = true)
+    private Double nota;
+
+    // Estudiante que realizó la entrega
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "estudiante_id", nullable = false)
     @JsonBackReference(value = "estudiante-entrega")
     private Estudiante estudiante;
 
-
-    // Nos preparamos para conectar con la Evaluación usando un value único
-    @ManyToOne(fetch = FetchType.LAZY) 
+    // Evaluación a la que corresponde la entrega
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "evaluacion_id", nullable = false)
     @JsonBackReference(value = "evaluacion-entrega")
     private Evaluacion evaluacion;
-
-    
-
 }

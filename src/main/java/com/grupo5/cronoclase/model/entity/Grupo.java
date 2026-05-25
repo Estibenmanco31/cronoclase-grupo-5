@@ -1,63 +1,51 @@
 package com.grupo5.cronoclase.model.entity;
 
-import com.grupo5.cronoclase.model.enums.*;
-
-import com.fasterxml.jackson.annotation.JsonBackReference;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
-
-import java.util.List;
+import com.grupo5.cronoclase.model.enums.DiaSemana;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder // Patrón Builder para crear objetos fácilmente
+@Builder
 @Entity
 @Table(name = "grupos")
-
 public class Grupo extends BaseEntity {
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = 150)
     private String nombre;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private DiaSemana dia;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Jornada jornada;
-
-    // Cambiado de BackReference a IgnoreProperties para que el Front SÍ vea el curso
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "curso_id", nullable = false)
-    @JsonIgnoreProperties({ "grupos", "hibernateLazyInitializer", "handler" })
-    private Curso curso;
-
-    // Se queda con @JsonIgnore porque el viaje empezó desde el estudiante
-    @OneToMany(mappedBy = "grupo", cascade = CascadeType.ALL)
-    @JsonIgnore 
-    private List<Matricula> matriculas;
-
-    // Cambiado a ManagedReference para que el Front pueda listar las evaluaciones del grupo
-    @OneToMany(mappedBy = "grupo", cascade = CascadeType.ALL)
-    @JsonManagedReference(value = "grupo-evaluacion")
-    private List<Evaluacion> evaluaciones;
-
-    // Perfecto, se queda así para ver los datos del profe sin bucles
+    // Profesor responsable del grupo (ManyToOne)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "profesor_id", nullable = false)
-    @JsonIgnoreProperties({ "grupos", "hibernateLazyInitializer", "handler" }) 
+    @JsonIgnoreProperties({"grupos", "perfil", "hibernateLazyInitializer", "handler"})
     private Profesor profesor;
 
+    // Inscripción directa de estudiantes al grupo (@ManyToMany)
+    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JoinTable(
+        name = "grupo_estudiante",
+        joinColumns = @JoinColumn(name = "grupo_id"),
+        inverseJoinColumns = @JoinColumn(name = "estudiante_id")
+    )
+    @JsonIgnoreProperties({"grupos", "entregas", "contacto", "hibernateLazyInitializer", "handler"})
+    @Builder.Default
+    private List<Estudiante> estudiantes = new ArrayList<>();
+
+    // Evaluaciones asignadas al grupo (@OneToMany)
+    @OneToMany(mappedBy = "grupo", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference(value = "grupo-evaluacion")
+    @Builder.Default
+    private List<Evaluacion> evaluaciones = new ArrayList<>();
 }

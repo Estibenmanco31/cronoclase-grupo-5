@@ -1,79 +1,102 @@
 package com.grupo5.cronoclase.service;
 
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import com.grupo5.cronoclase.repository.*;
+import com.grupo5.cronoclase.exception.BusinessException;
+import com.grupo5.cronoclase.exception.ResourceNotFoundException;
 import com.grupo5.cronoclase.model.entity.*;
+import com.grupo5.cronoclase.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
 
 @Service
-
+@RequiredArgsConstructor
 public class EvaluacionService {
 
-    @Autowired
-    private EvaluacionRepository evaluacionRepository;
+    private final EvaluacionRepository evaluacionRepository;
+    private final GrupoRepository grupoRepository;
 
+    // ─── CRUD ────────────────────────────────────────────────────────────────
 
+    @Transactional
     public Evaluacion crearEvaluacion(Evaluacion evaluacion) {
-        evaluacion.setId(null); // Ignoramos cualquier id del body para forzar INSERT
+        evaluacion.setId(null);
+        validarGrupoYPorcentaje(evaluacion.getGrupo().getId(), null, evaluacion.getPorcentaje());
         return evaluacionRepository.save(evaluacion);
     }
 
-    // Servicio para crear varias evaluaciones de una sola vez
-    public List<Evaluacion> crearVariasEvaluaciones(List<Evaluacion> evaluaciones) {
-        // Usamos el método que ya existe en el repositorio por herencia
-        return evaluacionRepository.saveAll(evaluaciones);
-    }
-
-    // servicio para obtener todas las evaluaciones
-    public List<Evaluacion> obtenerEvaluaciones() {
+    public List<Evaluacion> obtenerTodas() {
         return evaluacionRepository.findAll();
     }
 
-    // servicio para obtener evaluaciones por el ID de un grupo
-    public List<Evaluacion> findEvaluacionByGrupoId(Long grupoId) {
+    public Evaluacion obtenerPorId(Long id) {
+        return evaluacionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Evaluación no encontrada con ID: " + id));
+    }
+
+    // Panel del ESTUDIANTE: ver evaluaciones de su grupo
+    public List<Evaluacion> obtenerPorGrupo(Long grupoId) {
+        if (!grupoRepository.existsById(grupoId)) {
+            throw new ResourceNotFoundException("Grupo no encontrado con ID: " + grupoId);
+        }
         return evaluacionRepository.findByGrupoId(grupoId);
     }
 
-
-     // servicio para obtener evaluaciones por el nombre de un grupo
-    public List<Evaluacion> findEvaluacionByNombreGrupo(String grupoNombre) {
-        return evaluacionRepository.findByGrupoNombre(grupoNombre);
-    }
-
-
-
-    public Evaluacion obtenerPorId(Long id) {
-        // servicio para obtener una evaluacion por su ID
-        // De esta forma se busca una evaluacion por su ID y se lanza un mensaje de error
-        // en caso de que no se encuentre
-        return evaluacionRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Evaluación no encontrada con ID: " + id));
+    // Panel del PROFESOR: buscar evaluaciones por nombre de grupo
+    public List<Evaluacion> buscarPorNombreGrupo(String nombre) {
+        return evaluacionRepository.findByGrupoNombreContainingIgnoreCase(nombre);
     }
 
     @Transactional
     public Evaluacion actualizarEvaluacion(Long id, Evaluacion datosNuevos) {
-        Evaluacion evaluacionExistente = obtenerPorId(id);
+        Evaluacion existente = obtenerPorId(id);
+        Long grupoId = existente.getGrupo().getId();
 
-        // Actualizamos los campos de la entidad
-        evaluacionExistente.setTitulo(datosNuevos.getTitulo());
-        evaluacionExistente.setTipo(datosNuevos.getTipo());
-        evaluacionExistente.setPorcentaje(datosNuevos.getPorcentaje());
-        evaluacionExistente.setFechaEntrega(datosNuevos.getFechaEntrega());
-        // El grupo normalmente no se cambia, pero si lo necesitas, agrégalo aquí
+        // Validar porcentaje solo si cambia
+        if (!existente.getPorcentaje().equals(datosNuevos.getPorcentaje())) {
+            validarGrupoYPorcentaje(grupoId, id, datosNuevos.getPorcentaje());
+        }
 
-        return evaluacionRepository.save(evaluacionExistente);
+        existente.setTitulo(datosNuevos.getTitulo());
+        existente.setDescripcion(datosNuevos.getDescripcion());
+        existente.setTipo(datosNuevos.getTipo());
+        existente.setPorcentaje(datosNuevos.getPorcentaje());
+        existente.setFechaEntrega(datosNuevos.getFechaEntrega());
+
+        return evaluacionRepository.save(existente);
     }
 
     @Transactional
     public void eliminarEvaluacion(Long id) {
-        obtenerPorId(id); // Validamos existencia
+        obtenerPorId(id);
         evaluacionRepository.deleteById(id);
     }
 
+    // ─── Validación de porcentaje ─────────────────────────────────────────────
 
+    /**
+     * Valida que la suma de porcentajes del grupo no supere 100%.
+     * Si excludeId != null, se excluye esa evaluación (caso de edición).
+     */
+    private void validarGrupoYPorcentaje(Long grupoId, Long excludeId, Double nuevoPorcentaje) {
+        if (grupoId == null) {
+            throw new BusinessException("El ID del grupo es obligatorio.");
+        }
+        if (!grupoRepository.existsById(grupoId)) {
+            throw new ResourceNotFoundException("Grupo no encontrado con ID: " + grupoId);
+        }
+        if (nuevoPorcentaje == null || nuevoPorcentaje <= 0) {
+            throw new BusinessException("El porcentaje debe ser mayor a 0.");
+        }
 
+        Double sumaActual = evaluacionRepository.sumPorcentajeByGrupoId(grupoId, excludeId);
+        if (sumaActual + nuevoPorcentaje > 100.0) {
+            throw new BusinessException(String.format(
+                "La suma de porcentajes del grupo supera el 100%%. " +
+                "Suma actual: %.1f%%, intentando añadir: %.1f%%.",
+                sumaActual, nuevoPorcentaje
+            ));
+        }
+    }
 }

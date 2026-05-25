@@ -1,73 +1,118 @@
 package com.grupo5.cronoclase.controller;
 
-import org.springframework.web.bind.annotation.RestController;
-
+import com.grupo5.cronoclase.dtos.LoginRequestDTO;
+import com.grupo5.cronoclase.dtos.ProfesorRequestDTO;
+import com.grupo5.cronoclase.dtos.ProfesorResponseDTO;
 import com.grupo5.cronoclase.model.entity.*;
-import com.grupo5.cronoclase.service.*;
-import com.grupo5.cronoclase.dtos.*;
+import com.grupo5.cronoclase.service.ProfesorService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import java.util.List;
+import java.util.stream.Collectors;
 
-import java.util.*;
-
+@Tag(name = "Profesores", description = "Gestión de profesores y autenticación")
 @RestController
 @RequestMapping("/api/profesor")
-
+@RequiredArgsConstructor
 public class ProfesorController {
 
-    @Autowired
-    private ProfesorService profesorService;
+    private final ProfesorService profesorService;
 
+    @Operation(summary = "Registrar un nuevo profesor")
     @PostMapping
-    public Profesor crearProfesor(@RequestBody Profesor profesor) {
-        return profesorService.crearProfesor(profesor);
+    public ResponseEntity<ProfesorResponseDTO> crearProfesor(@Valid @RequestBody ProfesorRequestDTO dto) {
+        Profesor profesor = new Profesor();
+        profesor.setNombre(dto.getNombre());
+        profesor.setEmail(dto.getEmail());
+        profesor.setDocumentoID(dto.getDocumentoID());
+        profesor.setPassword(dto.getPassword());
+        profesor.setActivo(dto.getActivo() != null ? dto.getActivo() : true);
+
+        if (dto.getTelefono() != null || dto.getDireccion() != null) {
+            profesor.setContacto(ContactoEstudiante.builder()
+                    .telefono(dto.getTelefono())
+                    .direccion(dto.getDireccion())
+                    .build());
+        }
+        if (dto.getBiografia() != null || dto.getOficina() != null || dto.getEspecialidad() != null) {
+            profesor.setPerfil(PerfilProfesor.builder()
+                    .biografia(dto.getBiografia())
+                    .oficina(dto.getOficina())
+                    .especialidad(dto.getEspecialidad())
+                    .build());
+        }
+        Profesor creado = profesorService.crearProfesor(profesor);
+        return new ResponseEntity<>(ProfesorResponseDTO.fromEntity(creado), HttpStatus.CREATED);
     }
 
-    @PostMapping("/crearVarios")
-    List<Profesor> crearVariosProfesores(@RequestBody List<Profesor>  listaProfesores) {
-        return profesorService.crearVariosProfesores(listaProfesores);
-
-    }
-
-
-    
+    @Operation(summary = "Listar todos los profesores")
     @GetMapping
-    public List<Profesor>  obtenerProfesores() {
-        return profesorService.obtenerProfesores();
+    public ResponseEntity<List<ProfesorResponseDTO>> obtenerTodos() {
+        List<ProfesorResponseDTO> dtos = profesorService.obtenerTodos().stream()
+                .map(ProfesorResponseDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
-
-    @GetMapping("/buscar/{nombreProfesor}")
-    public List<Profesor> findProfesorByNombre(@PathVariable String nombreProfesor) {
-
-        return profesorService.findProfesorByNombre(nombreProfesor);
-
+    @Operation(summary = "Obtener un profesor por ID")
+    @GetMapping("/{id}")
+    public ResponseEntity<ProfesorResponseDTO> obtenerPorId(@PathVariable Long id) {
+        Profesor profesor = profesorService.obtenerPorId(id);
+        return ResponseEntity.ok(ProfesorResponseDTO.fromEntity(profesor));
     }
 
-    @GetMapping("/{profesorID}")
-    public ProfesorResponseDTO obtenerPorId(@PathVariable Long profesorID) {
-        return profesorService.obtenerPorId(profesorID);
+    @Operation(summary = "Buscar profesores por nombre")
+    @GetMapping("/buscar/{nombre}")
+    public ResponseEntity<List<ProfesorResponseDTO>> buscarPorNombre(@PathVariable String nombre) {
+        List<ProfesorResponseDTO> dtos = profesorService.buscarPorNombre(nombre).stream()
+                .map(ProfesorResponseDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
-    // 5. Actualizar un profesor por ID
+    @Operation(summary = "Actualizar datos de un profesor")
     @PutMapping("/{id}")
-    public Profesor actualizarProfesor(@PathVariable Long id, @RequestBody Profesor profesor) {
-        return profesorService.actualizarProfesor(id, profesor);
+    public ResponseEntity<ProfesorResponseDTO> actualizarProfesor(@PathVariable Long id, @Valid @RequestBody ProfesorRequestDTO dto) {
+        Profesor datos = new Profesor();
+        datos.setNombre(dto.getNombre());
+        datos.setEmail(dto.getEmail());
+        datos.setDocumentoID(dto.getDocumentoID());
+        datos.setPassword(dto.getPassword());
+        datos.setActivo(dto.getActivo());
+        if (dto.getTelefono() != null || dto.getDireccion() != null) {
+            datos.setContacto(ContactoEstudiante.builder()
+                    .telefono(dto.getTelefono())
+                    .direccion(dto.getDireccion())
+                    .build());
+        }
+        if (dto.getBiografia() != null || dto.getOficina() != null || dto.getEspecialidad() != null) {
+            datos.setPerfil(PerfilProfesor.builder()
+                    .biografia(dto.getBiografia())
+                    .oficina(dto.getOficina())
+                    .especialidad(dto.getEspecialidad())
+                    .build());
+        }
+        Profesor actualizado = profesorService.actualizarProfesor(id, datos);
+        return ResponseEntity.ok(ProfesorResponseDTO.fromEntity(actualizado));
     }
 
-    // 6. Eliminar un profesor por ID
+    @Operation(summary = "Eliminar un profesor")
     @DeleteMapping("/{id}")
-    public void eliminarProfesor(@PathVariable Long id) {
+    public ResponseEntity<Void> eliminarProfesor(@PathVariable Long id) {
         profesorService.eliminarProfesor(id);
+        return ResponseEntity.noContent().build();
     }
 
-
-
+    @Operation(summary = "Login del profesor con email y contraseña")
+    @PostMapping("/login")
+    public ResponseEntity<ProfesorResponseDTO> login(@Valid @RequestBody LoginRequestDTO dto) {
+        Profesor loggedIn = profesorService.login(dto.getEmail(), dto.getPassword());
+        return ResponseEntity.ok(ProfesorResponseDTO.fromEntity(loggedIn));
+    }
 }

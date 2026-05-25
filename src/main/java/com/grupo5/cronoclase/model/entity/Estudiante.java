@@ -1,25 +1,21 @@
 package com.grupo5.cronoclase.model.entity;
 
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import java.util.List;
-
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder // Patrón Builder para crear objetos fácilmente
+@Builder
 @Entity
 @Table(name = "estudiantes")
-
 public class Estudiante extends BaseEntity {
 
     @Column(nullable = false, length = 100)
@@ -31,16 +27,22 @@ public class Estudiante extends BaseEntity {
     @Column(unique = true, nullable = false)
     private String documentoID;
 
-    @OneToMany(mappedBy = "estudiante", cascade = CascadeType.ALL)
-    @JsonManagedReference //Esto se puso para evitar el retorno infinito en el GET
-    private List<Matricula> matriculas;
+    @Column(nullable = false, length = 100)
+    private String password;
 
-    
+    // Datos de contacto embebidos (@Embeddable)
+    @Embedded
+    private ContactoEstudiante contacto;
 
+    // Grupos en los que está inscrito el estudiante (lado inverso del @ManyToMany)
+    @ManyToMany(mappedBy = "estudiantes", fetch = FetchType.LAZY)
+    @JsonIgnore
+    @Builder.Default
+    private List<Grupo> grupos = new ArrayList<>();
 
-    // Quitamos @JsonIgnore y ponemos ManagedReference con su propio nombre
-    @OneToMany(mappedBy = "estudiante", cascade = CascadeType.ALL)
-    @JsonManagedReference(value = "estudiante-entrega") 
-    private List<Entrega> entregas;
-
+    // Entregas realizadas por el estudiante (@OneToMany)
+    @OneToMany(mappedBy = "estudiante", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference(value = "estudiante-entrega")
+    @Builder.Default
+    private List<Entrega> entregas = new ArrayList<>();
 }

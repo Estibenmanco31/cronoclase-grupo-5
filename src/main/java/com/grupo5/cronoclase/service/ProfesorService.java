@@ -1,110 +1,92 @@
 package com.grupo5.cronoclase.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import com.grupo5.cronoclase.exception.BusinessException;
+import com.grupo5.cronoclase.exception.ResourceNotFoundException;
+import com.grupo5.cronoclase.model.entity.*;
+import com.grupo5.cronoclase.repository.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.grupo5.cronoclase.repository.*;
-import com.grupo5.cronoclase.dtos.*;
-import com.grupo5.cronoclase.model.entity.*;
 
-import java.util.*;
+import java.util.List;
 
 @Service
-
+@RequiredArgsConstructor
 public class ProfesorService {
 
-    @Autowired
-    private ProfesorRepository profesorRepository;
+    private final ProfesorRepository profesorRepository;
 
-    // Servicio para crear un solo profesor
+    // ─── CRUD ────────────────────────────────────────────────────────────────
 
+    @Transactional
     public Profesor crearProfesor(Profesor profesor) {
-        // Ignoramos cualquier id que venga en el body para forzar un INSERT
         profesor.setId(null);
-        profesor.setActivo(true);
+        if (profesor.getActivo() == null) profesor.setActivo(true);
+        // Asignar la referencia bidireccional al perfil antes de persistir
+        if (profesor.getPerfil() != null) {
+            profesor.getPerfil().setProfesor(profesor);
+        }
         return profesorRepository.save(profesor);
     }
 
-    // Servicio para crear varios profesores de una sola vez
-
-    public List<Profesor> crearVariosProfesores(List<Profesor> profesores) {
-
-        // se hace eso para poder setear el estado como activo por defecto
-
-        profesores.forEach(p -> {
-            if (p.getActivo() == null)
-                p.setActivo(true);
-        });
-        return profesorRepository.saveAll(profesores);
-
-    }
-
-    // servicio para obtener todos los profesores
-
-    public List<Profesor> obtenerProfesores() {
+    public List<Profesor> obtenerTodos() {
         return profesorRepository.findAll();
     }
 
-    // Servicio para encotrar un profesor por su nombre
-
-    public List<Profesor> findProfesorByNombre(String nombreProfesor) {
-
-        List<Profesor> profesorEncontrado = profesorRepository.findByNombre(nombreProfesor);
-
-        if (profesorEncontrado.isEmpty()) {
-
-            throw new RuntimeException("Porfesor no encontrado, verifique el nombre ingresado");
-        }
-
-        else {
-            return profesorEncontrado;
-        }
-
-    }
-
-
-    public ProfesorResponseDTO obtenerPorId(Long id){
-
-        Profesor profesorEntity =  profesorRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Profesor no encontrado con ID: " + id));
-  
-        ProfesorResponseDTO profesorDto = new ProfesorResponseDTO();
-        profesorDto.setNombre(profesorEntity.getNombre());
-        profesorDto.setEmail(profesorEntity.getEmail());
-        return profesorDto;
-
-    }
-
-    public Profesor obtenerPorIdNoDTO(Long id) {
-        // De esta forma se busca un profesor por su ID. y se lanza un mensaje de error en 
-        //caso de que no se encuentre
+    public Profesor obtenerPorId(Long id) {
         return profesorRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Profesor no encontrado con ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado con ID: " + id));
     }
 
-    // --- ACTUALIZAR PROFESOR ---
+    public List<Profesor> buscarPorNombre(String nombre) {
+        List<Profesor> resultado = profesorRepository.findByNombreContainingIgnoreCase(nombre);
+        if (resultado.isEmpty()) {
+            throw new ResourceNotFoundException("No se encontraron profesores con nombre: " + nombre);
+        }
+        return resultado;
+    }
+
     @Transactional
     public Profesor actualizarProfesor(Long id, Profesor datosNuevos) {
-        // 1. Buscamos el profesor actual (si no existe, lanza el error ya programado)
-        Profesor profesorExistente = obtenerPorIdNoDTO(id);
-
-        // 2. Seteamos los nuevos datos
-        profesorExistente.setNombre(datosNuevos.getNombre());
-        profesorExistente.setEmail(datosNuevos.getEmail());
-        profesorExistente.setDocumentoID(datosNuevos.getDocumentoID());
-        profesorExistente.setActivo(datosNuevos.getActivo());
-
-        // 3. Guardamos (JPA hace el UPDATE automáticamente)
-        return profesorRepository.save(profesorExistente);
+        Profesor existente = obtenerPorId(id);
+        existente.setNombre(datosNuevos.getNombre());
+        existente.setEmail(datosNuevos.getEmail());
+        existente.setDocumentoID(datosNuevos.getDocumentoID());
+        existente.setActivo(datosNuevos.getActivo());
+        if (datosNuevos.getPassword() != null) {
+            existente.setPassword(datosNuevos.getPassword());
+        }
+        if (datosNuevos.getContacto() != null) {
+            existente.setContacto(datosNuevos.getContacto());
+        }
+        // Actualizar perfil si existe
+        if (datosNuevos.getPerfil() != null) {
+            if (existente.getPerfil() != null) {
+                existente.getPerfil().setBiografia(datosNuevos.getPerfil().getBiografia());
+                existente.getPerfil().setOficina(datosNuevos.getPerfil().getOficina());
+                existente.getPerfil().setEspecialidad(datosNuevos.getPerfil().getEspecialidad());
+            } else {
+                datosNuevos.getPerfil().setProfesor(existente);
+                existente.setPerfil(datosNuevos.getPerfil());
+            }
+        }
+        return profesorRepository.save(existente);
     }
 
-    // --- ELIMINAR PROFESOR ---
     @Transactional
     public void eliminarProfesor(Long id) {
-        // Validamos que existe antes de intentar borrar
         obtenerPorId(id);
-
         profesorRepository.deleteById(id);
     }
 
+    // ─── AUTENTICACIÓN ───────────────────────────────────────────────────────
+
+    public Profesor login(String email, String password) {
+        Profesor profesor = profesorRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException("Credenciales inválidas: Profesor no encontrado"));
+        if (!profesor.getPassword().equals(password)) {
+            throw new BusinessException("Credenciales inválidas: Contraseña incorrecta");
+        }
+        return profesor;
+    }
 }

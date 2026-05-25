@@ -1,18 +1,18 @@
 package com.grupo5.cronoclase.repository;
 
-import com.grupo5.cronoclase.model.entity.*;
+import com.grupo5.cronoclase.model.entity.Profesor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-import java.util.*;
 
-
+import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ProfesorRepository extends JpaRepository<Profesor, Long> {
 
-    List<Profesor> findByNombre(String NombreProfesor);
+    // Búsqueda flexible por nombre (Derived Query)
+    List<Profesor> findByNombreContainingIgnoreCase(String nombre);
 
-   
-
-
+    // Búsqueda por email para login (Derived Query)
+    Optional<Profesor> findByEmail(String email);
 }

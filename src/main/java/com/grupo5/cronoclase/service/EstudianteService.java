@@ -1,121 +1,76 @@
 package com.grupo5.cronoclase.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import com.grupo5.cronoclase.repository.*;
-import com.grupo5.cronoclase.dtos.*;
+import com.grupo5.cronoclase.exception.BusinessException;
+import com.grupo5.cronoclase.exception.ResourceNotFoundException;
 import com.grupo5.cronoclase.model.entity.*;
+import com.grupo5.cronoclase.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
 
 @Service
-
+@RequiredArgsConstructor
 public class EstudianteService {
 
-    @Autowired
-    private EstudianteRepository estudianteRepository;
+    private final EstudianteRepository estudianteRepository;
 
-    // Servicio para crear un solo estudiante
+    // ─── CRUD ────────────────────────────────────────────────────────────────
 
+    @Transactional
     public Estudiante crearEstudiante(Estudiante estudiante) {
-        estudiante.setId(null); // Ignoramos cualquier id del body para forzar INSERT
+        estudiante.setId(null);
         return estudianteRepository.save(estudiante);
     }
 
-
-     
-
-
-    // Servicio para crear varios estudiantes de una sola vez
-
-    public List<Estudiante> crearVariosEstudiantes(List<Estudiante> estudiantes) {
-        // Usamos el método que ya existe en el repositorio por herencia
-        return estudianteRepository.saveAll(estudiantes);
-    }
-
-    // servicio para obtener todos los estudiantes
-
-    public List<Estudiante> obtenerEstudiantes() {
+    public List<Estudiante> obtenerTodos() {
         return estudianteRepository.findAll();
     }
 
-    // Servicio para encotrar un estudiante por su documento de identidad
-
-    public Estudiante findEstudianteByDocumento(String documentoID) {
-
-        // El optional puede o no tene run estudiante. lo que se devuelve es el
-        // estudiante que este dentro
-        // del optional, de lo contrario se tira la excepcion.
-        // como el optional es un contenedor, por eso necesita los metodos, el .get() y
-        // el .isPresent
-
-        Optional<Estudiante> estudianteEncontrado = estudianteRepository.findByDocumentoID(documentoID);
-
-        if (estudianteEncontrado.isPresent()) {
-
-            return estudianteEncontrado.get();
-        }
-
-        else {
-            throw new RuntimeException("Estudiante no encontrado, verifique ID ingresado");
-        }
-
-    }
-
-    public List<Estudiante> findEstudianteByNombre(String nombreEstudiante) {
-
-        return estudianteRepository.findByNombreContainingIgnoreCase(nombreEstudiante);
-
-    }
-
-    public EstudianteResponseDTO obtenerPorId(Long id) {
-
-        // 1. Buscamos la entidad completa en la BD
-        Estudiante estudianteEntidad = estudianteRepository.findById(id)
-        .orElseThrow(() -> new RuntimeException("Estudiante no encontrado con ID: " + id));
-        EstudianteResponseDTO estudianteDTO = new EstudianteResponseDTO();
-        estudianteDTO.setNombre(estudianteEntidad.getNombre());
-        estudianteDTO.setEmail(estudianteEntidad.getEmail());
-
-        return estudianteDTO;
-
-    }
-
-
-    private Estudiante buscarEntidadPorId(Long id) {
+    public Estudiante obtenerPorId(Long id) {
         return estudianteRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Estudiante no encontrado con ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Estudiante no encontrado con ID: " + id));
     }
 
+    public Estudiante buscarPorDocumento(String documentoID) {
+        return estudianteRepository.findByDocumentoID(documentoID)
+                .orElseThrow(() -> new ResourceNotFoundException("Estudiante no encontrado con documento: " + documentoID));
+    }
 
-    // --- ACTUALIZAR ESTUDIANTE ---
+    public List<Estudiante> buscarPorNombre(String nombre) {
+        return estudianteRepository.findByNombreContainingIgnoreCase(nombre);
+    }
+
     @Transactional
     public Estudiante actualizarEstudiante(Long id, Estudiante datosNuevos) {
-        // 1. Buscamos al estudiante actual (si no existe, lanza el error que ya
-        // programaste)
-        Estudiante estudianteExistente = buscarEntidadPorId(id);
-
-        // 2. Seteamos los nuevos datos
-        estudianteExistente.setNombre(datosNuevos.getNombre());
-        estudianteExistente.setEmail(datosNuevos.getEmail());
-        estudianteExistente.setDocumentoID(datosNuevos.getDocumentoID());
-
-        // 3. Guardamos (JPA hace el UPDATE automáticamente)
-        return estudianteRepository.save(estudianteExistente);
+        Estudiante existente = obtenerPorId(id);
+        existente.setNombre(datosNuevos.getNombre());
+        existente.setEmail(datosNuevos.getEmail());
+        existente.setDocumentoID(datosNuevos.getDocumentoID());
+        if (datosNuevos.getPassword() != null) {
+            existente.setPassword(datosNuevos.getPassword());
+        }
+        if (datosNuevos.getContacto() != null) {
+            existente.setContacto(datosNuevos.getContacto());
+        }
+        return estudianteRepository.save(existente);
     }
 
-
-
-    // --- ELIMINAR ESTUDIANTE ---
     @Transactional
     public void eliminarEstudiante(Long id) {
-        // Validamos que existe antes de intentar borrar
         obtenerPorId(id);
-        
-        // Al ejecutar esto, por el CascadeType.ALL que tienes en la Entidad,
-        // se borrarán también sus MATRICULAS y sus ENTREGAS.
         estudianteRepository.deleteById(id);
     }
 
+    // ─── AUTENTICACIÓN ───────────────────────────────────────────────────────
+
+    public Estudiante login(String email, String password) {
+        Estudiante estudiante = estudianteRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException("Credenciales inválidas: Estudiante no encontrado"));
+        if (!estudiante.getPassword().equals(password)) {
+            throw new BusinessException("Credenciales inválidas: Contraseña incorrecta");
+        }
+        return estudiante;
+    }
 }
