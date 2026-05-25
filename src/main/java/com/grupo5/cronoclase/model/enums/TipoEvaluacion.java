@@ -1,9 +1,11 @@
 package com.grupo5.cronoclase.model.enums;
 
-public enum  TipoEvaluacion {
-     TAREA,
+public enum TipoEvaluacion {
+    TAREA,
     QUIZ,
     PARCIAL,
-    PROYECTO
-
+    TALLER,
+    PROYECTO,
+    EXAMEN_FINAL
 }
+

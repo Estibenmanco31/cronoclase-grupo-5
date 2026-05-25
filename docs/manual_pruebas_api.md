@@ -151,7 +151,7 @@ El profesor crea una actividad calificable para su grupo.
   "grupoId": 1
 }
 ```
-> **Tipos válidos**: `PARCIAL`, `QUIZ`, `PROYECTO`, `TALLER`, `EXAMEN_FINAL`
+> **Tipos válidos**: `TAREA`, `PARCIAL`, `QUIZ`, `PROYECTO`, `TALLER`, `EXAMEN_FINAL`
 
 > [!WARNING]
 > **Regla de negocio (Tope 100%)**: La suma de los porcentajes de todas las evaluaciones en un mismo grupo no puede exceder el `100.0%`. Si creas una evaluación que supere esta suma, la API lanzará un error `400 Bad Request` indicando el porcentaje actual acumulado.
