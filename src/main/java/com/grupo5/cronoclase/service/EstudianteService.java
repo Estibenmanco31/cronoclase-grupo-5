@@ -20,6 +20,12 @@ public class EstudianteService {
 
     @Transactional
     public Estudiante crearEstudiante(Estudiante estudiante) {
+        if (estudianteRepository.existsByEmail(estudiante.getEmail())) {
+            throw new BusinessException("El correo ya está en uso");
+        }
+        if (estudianteRepository.existsByDocumentoID(estudiante.getDocumentoID())) {
+            throw new BusinessException("El número de documento ya está registrado");
+        }
         estudiante.setId(null);
         return estudianteRepository.save(estudiante);
     }

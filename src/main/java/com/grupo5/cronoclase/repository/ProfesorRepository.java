@@ -15,4 +15,10 @@ public interface ProfesorRepository extends JpaRepository<Profesor, Long> {
 
     // Búsqueda por email para login (Derived Query)
     Optional<Profesor> findByEmail(String email);
+
+    Optional<Profesor> findByDocumentoID(String documentoID);
+
+    boolean existsByEmail(String email);
+
+    boolean existsByDocumentoID(String documentoID);
 }

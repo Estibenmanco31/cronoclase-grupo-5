@@ -20,6 +20,12 @@ public class ProfesorService {
 
     @Transactional
     public Profesor crearProfesor(Profesor profesor) {
+        if (profesorRepository.existsByEmail(profesor.getEmail())) {
+            throw new BusinessException("El correo ya está en uso");
+        }
+        if (profesorRepository.existsByDocumentoID(profesor.getDocumentoID())) {
+            throw new BusinessException("El número de documento ya está registrado");
+        }
         profesor.setId(null);
         if (profesor.getActivo() == null) profesor.setActivo(true);
         // Asignar la referencia bidireccional al perfil antes de persistir
